@@ -26,7 +26,7 @@ GITHUB_REPOS = [
     "pytorch/vision",
 ]
 MAX_ISSUES_PER_REPO = 200
-GITHUB_TOKEN = env  
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  
 
 # ===== Data Processing =====
 MIN_ERROR_LENGTH = 20       
