@@ -17,16 +17,17 @@ STACKOVERFLOW_TAGS = [
     "tensorrt",
 ]
 
-MAX_QUESTIONS_PER_TAG = 100
+MAX_QUESTIONS_PER_TAG = 200
 MIN_ANSWER_SCORE = 1  
 
 GITHUB_REPOS = [
     "ultralytics/ultralytics",
     "pytorch/pytorch",
     "pytorch/vision",
+    "huggingface/transformers",
+    "open-mmlab/mmdetection",
 ]
-MAX_ISSUES_PER_REPO = 200
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  
+MAX_ISSUES_PER_REPO = 500
 
 # ===== Data Processing =====
 MIN_ERROR_LENGTH = 20       

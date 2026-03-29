@@ -18,18 +18,21 @@ def get_headers() -> dict:
         headers["Authorization"] = f"token {token}"
     return headers
 
-def fetch_issues(repo: str, page: int = 1, per_page: int = 50) -> list[dict]:
+def fetch_issues(repo: str, page: int = 1, per_page: int = 50, labels: str | None = "bug") -> list[dict]:
+    params = {
+        "state": "closed",
+        "sort": "comments",
+        "direction": "desc",
+        "page": page,
+        "per_page": per_page,
+    }
+    if labels:
+        params["labels"] = labels
+    
     resp = requests.get(
         f"https://api.github.com/repos/{repo}/issues",
         headers=get_headers(),
-        params={
-            "state": "closed",
-            "labels": "bug",
-            "sort": "comments",  
-            "direction": "desc",
-            "page": page,
-            "per_page": per_page,
-        },
+        params=params,
         timeout=15,
     )
     resp.raise_for_status()
@@ -140,13 +143,13 @@ comments: list[dict]
     return best_text, best_assoc
 
 def scrape_repo(repo: str) -> list[dict]:
-    """Scrape error→fix pairs from a single GitHub repo."""
     pairs = []
     pages_needed = (MAX_ISSUES_PER_REPO // 50) + 1
- 
+    labels = None if "pytorch/pytorch" in repo else "bug"
+
     for page in range(1, pages_needed + 1):
         try:
-            issues = fetch_issues(repo, page=page)
+            issues = fetch_issues(repo, page=page, labels=labels)
         except requests.RequestException as e:
             print(f"  [!] API error: {e}")
             break

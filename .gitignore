@@ -1,0 +1,33 @@
+# Data (don't commit scraped data to git)
+/data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Model artifacts
+*.bin
+*.safetensors
+*.pt
+*.onnx
+checkpoints/
+
+# FAISS index
+*.faiss
+*.index
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
