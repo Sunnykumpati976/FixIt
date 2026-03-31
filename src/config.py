@@ -34,3 +34,9 @@ MIN_ERROR_LENGTH = 20
 MAX_ERROR_LENGTH = 3000     
 MIN_FIX_LENGTH = 30         
 
+# ===== RAG Pipeline =====
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+FAISS_INDEX_PATH = "data/processed/faiss_index"
+CHUNK_SIZE = 512
+CHUNK_OVERLAP = 50
+TOP_K_RETRIEVAL = 5
