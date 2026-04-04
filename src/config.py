@@ -40,3 +40,8 @@ FAISS_INDEX_PATH = "data/processed/faiss_index"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
 TOP_K_RETRIEVAL = 5
+
+# ===== API =====
+API_HOST = "0.0.0.0"
+API_PORT = 8000
+MAX_INPUT_LENGTH = 5000
