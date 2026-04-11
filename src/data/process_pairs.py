@@ -64,16 +64,38 @@ def clean_fix(text: str) -> str:
  
  
 def is_valid_pair(error: str, fix: str) -> bool:
-    """Check if an error→fix pair meets quality thresholds."""
     if len(error) < MIN_ERROR_LENGTH:
         return False
     if len(fix) < MIN_FIX_LENGTH:
         return False
- 
-    # Fix should actually contain useful content
+
+    # Junk fixes
     if fix.lower().strip() in ["i have the same issue", "same here", "+1", "bump"]:
         return False
- 
+
+    # Bot responses — THIS IS WHAT'S POISONING MY MODEL
+    bot_signals = [
+        "thank you for your interest",
+        "this is an automated response",
+        "ultralytics 🚀",
+        "please provide",
+        "minimum reproducible example",
+        "yolo mre",
+        "this issue has been automatically",
+        "stale bot",
+        "github-actions",
+    ]
+    if any(signal in fix.lower() for signal in bot_signals):
+        return False
+
+    # Fix is just a question, not an answer
+    if fix.strip().endswith("?") and fix.count("?") > fix.count("."):
+        return False
+
+    # Fix is too short to be useful even if above MIN_FIX_LENGTH
+    if len(fix.split()) < 15:
+        return False
+
     # Error should contain something error-like
     error_indicators = [
         "error", "exception", "traceback", "failed", "fault",
@@ -81,7 +103,7 @@ def is_valid_pair(error: str, fix: str) -> bool:
     ]
     if not any(kw in error.lower() for kw in error_indicators):
         return False
- 
+
     return True
 
 def format_for_training(error: str, fix: str) -> dict:
