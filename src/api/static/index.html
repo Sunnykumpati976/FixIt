@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FixIt — ML Error Diagnosis</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07070d;
+    --bg-card: #0c0c16;
+    --border: #16162a;
+    --text: #d8d8e8;
+    --text-muted: #5a5a78;
+    --accent: #f43f5e;
+    --accent-glow: #f43f5e30;
+    --green: #22c55e;
+    --orange: #fb923c;
+    --purple: #a78bfa;
+    --blue: #60a5fa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    backdrop-filter: blur(20px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg)ee;
+  }
+
+  .logo-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #f43f5e, #fb923c);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .logo-text h1 {
+    font-size: 18px; font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .logo-text span {
+    font-size: 11px; color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .status-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--green);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    background: #22c55e10;
+    border: 1px solid #22c55e30;
+    padding: 4px 12px;
+    border-radius: 999px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 32px 20px;
+  }
+
+  .hero {
+    text-align: center;
+    margin-bottom: 40px;
+    animation: fadeUp 0.6s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero h2 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff, #999);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero p {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 500px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* Pipeline visualization */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 24px 0;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s ease 0.1s both;
+  }
+
+  .pipe-node {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .pipe-arrow { color: var(--text-muted); font-size: 14px; }
+
+  /* Input area */
+  .input-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    animation: fadeUp 0.6s ease 0.2s both;
+    transition: border-color 0.3s;
+  }
+
+  .input-card:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 30px var(--accent-glow);
+  }
+
+  .input-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .method-badge {
+    background: #22c55e18;
+    color: var(--green);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  .endpoint {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 16px 18px;
+    resize: vertical;
+    line-height: 1.6;
+    outline: none;
+  }
+
+  textarea::placeholder { color: #3a3a50; }
+
+  .input-footer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .char-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .submit-btn {
+    background: linear-gradient(135deg, #f43f5e, #e11d48);
+    border: none;
+    color: #fff;
+    padding: 8px 24px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-glow); }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Sample errors */
+  .samples {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s ease 0.3s both;
+  }
+
+  .sample-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .sample-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  /* Loading */
+  .loading {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    animation: fadeUp 0.3s ease;
+  }
+
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top: 2px solid var(--orange);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { font-size: 13px; }
+  .loading-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Response */
+  .response-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease;
+  }
+
+  .response-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .response-status {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .status-200 {
+    background: #22c55e18;
+    color: var(--green);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  .mode-badge {
+    background: var(--orange);
+    color: #000;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .latency {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .response-body {
+    padding: 20px;
+  }
+
+  .diagnosis {
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .diagnosis code {
+    background: #16162a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--orange);
+  }
+
+  .diagnosis pre {
+    background: #0a0a18;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin: 12px 0;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--green);
+  }
+
+  .sources-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sources-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .sources-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .source-tag {
+    background: #16162a;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--blue);
+    font-family: 'JetBrains Mono', monospace;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .source-tag:hover { background: #1e1e38; }
+
+  .error-card {
+    background: #1a0a0a;
+    border: 1px solid #4a1a1a;
+    border-radius: 14px;
+    padding: 20px;
+    color: #ff6b6b;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    animation: fadeUp 0.3s ease;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-group">
+    <div class="logo">F</div>
+    <div class="logo-text">
+      <h1>FixIt</h1>
+      <span>ML Error Diagnosis API</span>
+    </div>
+  </div>
+  <div class="status-badge" id="statusBadge">
+    <div class="status-dot"></div>
+    <span>checking...</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="hero">
+    <h2>Paste your error. Get a fix.</h2>
+    <p>RAG-powered error diagnosis for PyTorch, YOLO, CUDA, and more. Retrieves relevant docs and generates actionable fixes.</p>
+  </div>
+
+  <div class="pipeline">
+    <div class="pipe-node" style="background:#f43f5e15;border:1px solid #f43f5e30;color:#f43f5e">Error Log</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-node" style="background:#a78bfa15;border:1px solid #a78bfa30;color:#a78bfa">RAG Retrieval</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-node" style="background:#fb923c15;border:1px solid #fb923c30;color:#fb923c">LLM Diagnosis</div>
+    <span class="pipe-arrow">→</span>
+    <div class="pipe-node" style="background:#22c55e15;border:1px solid #22c55e30;color:#22c55e">Fix</div>
+  </div>
+
+  <div class="samples">
+    <button class="sample-btn" onclick="useSample(0)">CUDA OOM</button>
+    <button class="sample-btn" onclick="useSample(1)">Device Mismatch</button>
+    <button class="sample-btn" onclick="useSample(2)">Shape Error</button>
+    <button class="sample-btn" onclick="useSample(3)">DataLoader Killed</button>
+  </div>
+
+  <div class="input-card">
+    <div class="input-header">
+      <span class="method-badge">POST</span>
+      <span class="endpoint">/diagnose</span>
+    </div>
+    <textarea id="errorInput" placeholder="Paste your PyTorch/YOLO error or traceback here..."></textarea>
+    <div class="input-footer">
+      <span class="char-count" id="charCount">0 chars</span>
+      <button class="submit-btn" id="submitBtn" onclick="diagnose()">
+        Diagnose
+      </button>
+    </div>
+  </div>
+
+  <div id="output"></div>
+</div>
+
+<script>
+const SAMPLES = [
+  `RuntimeError: CUDA out of memory. Tried to allocate 2.00 GiB\n(GPU 0; 15.78 GiB total capacity; 13.12 GiB already allocated;\n1.41 GiB free; 14.26 GiB reserved in total by PyTorch)`,
+  `RuntimeError: Expected all tensors to be on the same device,\nbut found at least two devices, cuda:0 and cpu!\n  File "model.py", line 45, in forward\n    output = self.layer(x + bias)`,
+  `RuntimeError: mat1 and mat2 shapes cannot be multiplied\n(32x512 and 256x10)\n  File "model.py", line 47, in forward\n    x = self.fc(x)`,
+  `RuntimeError: DataLoader worker (pid 23451) is killed by\nsignal: Killed.\n  File "train.py", line 89\n    for batch in dataloader:`
+];
+
+const input = document.getElementById('errorInput');
+const charCount = document.getElementById('charCount');
+const output = document.getElementById('output');
+const submitBtn = document.getElementById('submitBtn');
+
+input.addEventListener('input', () => {
+  charCount.textContent = `${input.value.length} chars`;
+});
+
+function useSample(idx) {
+  input.value = SAMPLES[idx];
+  charCount.textContent = `${input.value.length} chars`;
+  input.focus();
+}
+
+// Check API health
+async function checkHealth() {
+  const badge = document.getElementById('statusBadge');
+  try {
+    const res = await fetch('/health');
+    const data = await res.json();
+    badge.innerHTML = `<div class="status-dot"></div><span>${data.mode || 'online'}</span>`;
+  } catch {
+    badge.innerHTML = `<div class="status-dot" style="background:#ef4444;animation:none"></div><span>offline</span>`;
+    badge.style.color = '#ef4444';
+    badge.style.borderColor = '#ef444430';
+    badge.style.background = '#ef444410';
+  }
+}
+checkHealth();
+
+async function diagnose() {
+  const errorLog = input.value.trim();
+  if (!errorLog) return;
+
+  submitBtn.disabled = true;
+  output.innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>
+        <div class="loading-text">Diagnosing error...</div>
+        <div class="loading-sub">RAG retrieval → LLM inference</div>
+      </div>
+    </div>
+  `;
+
+  try {
+    const res = await fetch('/diagnose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error_log: errorLog })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Format diagnosis — basic markdown rendering
+    let diagnosis = data.diagnosis
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre>$2</pre>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/^## (.+)$/gm, '<h3 style="color:#fff;font-size:15px;margin:16px 0 8px">$1</h3>')
+      .replace(/^### (.+)$/gm, '<h4 style="color:#ccc;font-size:14px;margin:12px 0 6px">$1</h4>')
+      .replace(/^\d+\)\s/gm, '<br>• ');
+
+    // Deduplicate sources
+    const seen = new Set();
+    const uniqueSources = data.sources.filter(s => {
+      if (seen.has(s.url)) return false;
+      seen.add(s.url);
+      return true;
+    });
+
+    output.innerHTML = `
+      <div class="response-card">
+        <div class="response-header">
+          <div class="response-status">
+            <span class="status-200">200</span>
+            <span class="mode-badge">${data.mode}</span>
+          </div>
+          <span class="latency">${Math.round(data.latency_ms)}ms</span>
+        </div>
+        <div class="response-body">
+          <div class="diagnosis">${diagnosis}</div>
+          <div class="sources-section">
+            <div class="sources-label">Sources</div>
+            <div class="sources-list">
+              ${uniqueSources.map(s =>
+                `<a class="source-tag" href="${s.url}" target="_blank">${new URL(s.url).hostname}${new URL(s.url).pathname.split('/').slice(-1)}</a>`
+              ).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    output.innerHTML = `<div class="error-card">Error: ${err.message}</div>`;
+  }
+
+  submitBtn.disabled = false;
+}
+
+// Submit on Ctrl+Enter
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) diagnose();
+});
+</script>
+</body>
+</html>
